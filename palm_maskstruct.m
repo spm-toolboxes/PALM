@@ -1,4 +1,4 @@
-function S = palm_maskstruct(mask,readwith,extra,affine)
+function S = palm_maskstruct(mask,readwith,extra,affine,size)
 % Create a struct for a mask, as if it had been read from a file.
 % This is useful to save later the data.
 %
@@ -12,6 +12,7 @@ function S = palm_maskstruct(mask,readwith,extra,affine)
 % extra    : A struct that varies according to which function
 %            was used to read the data.
 % affine   : Affine matrix, used for testing sizes.
+% size     : Size of the original data
 %
 % Usage:
 % S        : A struct derived from the 'extra' argument along
@@ -85,7 +86,6 @@ switch lower(readwith)
         % Image Processing Toolbox or Octave's equivalent commands
         S.data          = palm_conv2toN(mask,extra.hdr.ImageSize(1:3));
         S.extra.hdr     = extra.hdr;
-        S.affine        = affine;
 
     case 'nifticlass'
         
@@ -93,7 +93,6 @@ switch lower(readwith)
         S.data          = palm_conv2toN(mask,extra.dat.dim(1:3));
         S.extra.mat     = extra.mat;
         S.extra.dat.dim = extra.dat.dim;
-        S.affine        = affine;
         
     case 'spm_spm_vol' % no longer used
         
@@ -113,7 +112,6 @@ switch lower(readwith)
         S.extra.hdr.pixdim(5)  = 0;
         S.extra.hdr.datatype   = 64;
         S.extra.hdr.bitpix     = 64;
-        S.affine               = affine;
         
     case 'fsl_read_avw' % no longer used
         
@@ -156,3 +154,5 @@ switch lower(readwith)
     otherwise
         error('Unknown format: %s',readwith);
 end
+S.affine = affine;
+S.size   = size;

@@ -1661,9 +1661,11 @@ plm.Yset     = cell(Ni,1);  % Regressands (Y)
 plm.Yisvol   = false(Ni,1); % Is Y a volume image?
 plm.Yissrf   = false(Ni,1); % Is Y a surface-based image (DPX)?
 plm.Yisvtx   = false(Ns,1); % Is vertexwise?
-plm.Yisfac   = false(Ns,1); % is facewise? (this is currently dichotomous with Yisvtx, but later there may be edges/connectivity too)
+plm.Yisfac   = false(Ns,1); % Is facewise? (this is currently dichotomous with Yisvtx, but later there may be edges/connectivity too)
 plm.Yarea    = cell(Ns,1);  % To store area per face or per vertex (used for cluster-level & TFCE).
-plm.Ykindstr = cell(Ni,1);  % string to save the files later
+plm.Ykindstr = cell(Ni,1);  % String to save the files later
+plm.Yaffine  = cell(Ni,1);  % To keep the affine matrices of the input data
+plm.Ysizorig = cell(Ni,1);  % To keep the original sizes of the input data
 for i = 1:Ni
     
     % Read input file
@@ -1673,9 +1675,11 @@ for i = 1:Ni
     else
         maskstruct = plm.masks{i};
     end
-    [plm.Yset{i},plm.masks{i},plm.Yisvol(i),plm.Yissrf(i),plm.Ykindstr{i}] = ...
+    [plm.Yset{i},plm.masks{i},plm.Yisvol(i),plm.Yissrf(i),plm.Ykindstr{i},Ytmp] = ...
         palm_ready(opts.i{i},maskstruct,opts,true);
-    
+    plm.Yaffine{i}  = Ytmp.affine;
+    plm.Ysizorig{i} = Ytmp.size;
+
     % Select subjects
     if ~ isempty(plm.subjidx)
         plm.Yset{i} = plm.Yset{i}(plm.subjidx,:);
@@ -1735,7 +1739,7 @@ for i = 1:Ni
                 % No area file given, use the actual surface area
                 plm.Yarea{i} = palm_calcarea(plm.srf{s}.data,plm.Yisvtx(i));
                 
-            elseif numel(plm.srfarea{s}.data) == 1
+            elseif isscalar(plm.srfarea{s}.data)
                 
                 % A weight given (such as 1): use that for each vertex or face,
                 % treating as if all had the same area.
@@ -1765,6 +1769,34 @@ for i = 1:Ni
 end
 plm.nmasks = numel(plm.masks);
 plm.nY     = numel(plm.Yset); % this is redefined below if opts.inputmv is set.
+
+% Confirm that for NPC, MV, CCA/PLS we have inputs all of the same size and
+% same affine matrix
+if opts.npcmod || opts.MV || opts.CCA || opts.PLS
+    for i = 1:Ni-1
+        if ~isscalar(plm.Yaffine{i}) && ~isscalar(plm.Yaffine{i+1})
+            if any(plm.Yaffine{i}(:) ~= plm.Yaffine{i+1}(:))
+                Yaffine1 = plm.Yaffine{i}';
+                Yaffine2 = plm.Yaffine{i+1}';
+                error('%s', sprintf([...
+                    'Input file has coordinate system different from its corresponding mask:\n'...
+                    '- Input data file: %s\n' ...
+                    '  Affine matrix:\n'      ...
+                    '  [ %f %f %f %f\n'       ...
+                    '    %f %f %f %f\n'       ...
+                    '    %f %f %f %f\n'       ...
+                    '    %f %f %f %f ]\n'     ...
+                    '- Input data file: %s\n' ...
+                    '  Affine matrix:\n'      ...
+                    '  [ %f %f %f %f\n'       ...
+                    '    %f %f %f %f\n'       ...
+                    '    %f %f %f %f\n'       ...
+                    '    %f %f %f %f ]\n'],   ...
+                    opts.i{i},Yaffine1(:),opts.i{i+1},Yaffine2(:)))
+            end
+        end
+    end
+end
 
 % Some extra packages for Octave
 if palm_isoctave
@@ -1903,7 +1935,8 @@ if opts.npcmod || opts.MV || opts.CCA || opts.PLS || opts.forcemaskinter
         
         % Note that this line below uses Ytmp, which is from the previous loop.
         % This can be used here because with NPC all data has the same size.
-        plm.maskinter = palm_maskstruct(maskinter(:)',plm.masks{1}.readwith,plm.masks{1}.extra);
+        plm.maskinter = palm_maskstruct(maskinter(:)',plm.masks{1}.readwith,...
+            plm.masks{1}.extra,plm.masks{1}.affine,plm.masks{1}.size);
         
         % Apply it to further subselect data points
         for y = 1:plm.nY
@@ -1947,7 +1980,7 @@ if opts.npcmod || opts.MV || opts.forcemaskinter
                 fprintf('Expanding modality #%d to match the size of the others.\n',y);
                 plm.Yset{y} = repmat(plm.Yset{y},[1 usiz(2)]);
                 if plm.nmasks > 1
-                    if numel(plm.masks{y}.data) == 1
+                    if isscalar(plm.masks{y}.data)
                         plm.masks{y}.data = plm.masks{uidx(2)}.data;
                     else
                         error('Modality expansion is only allowed for single input variables.')
@@ -2825,7 +2858,7 @@ for a = 1:size(A,2)
             (numel(U) >  2) || ...
             (numel(U) == 2 && ~ any(U == 0)) || ...
             (numel(U) == 2 && ~ any(U(U~=0) == [-1 1 2])) || ...
-            (numel(U) == 1 && U ~= 0)
+            (numel(U) == 1 && U ~= 0) %#ok
         error([ ...
             'The missing data indicators ("-imiss" and "-dmiss") must have\n', ...
             'no more than two unique values per column, one being 0, the\n', ...
