@@ -2,36 +2,12 @@
 #
 # Copyright (C) 1991-2014 Wellcome Trust Centre for Neuroimaging
 #
-# $Id: Makefile.var 6099 2014-07-11 12:21:35Z guillaume $
-#
-###############################################################################
-#
-# This file defines variables used in Makefile and has been tested under 
-# Linux, Windows and MacOS.
-# 
-# If you have to tweak this file to compile the SPM MEX-files for your 
-# platform, please send the details to <fil.spm@ucl.ac.uk> so they can be 
-# included here. 
-#
-# You can find some more help online on the SPM wikibook:
-#  * Linux:
-#      http://en.wikibooks.org/wiki/SPM/Installation_on_Linux
-#      http://en.wikibooks.org/wiki/SPM/Installation_on_64bit_Linux 
-#  * Windows:
-#      http://en.wikibooks.org/wiki/SPM/Installation_on_Windows
-#      http://en.wikibooks.org/wiki/SPM/Installation_on_64bit_Windows
-#      MinGW: http://www.mingw.org/
-#  * MacOS:
-#      http://en.wikibooks.org/wiki/SPM/Installation_on_Mac_OS_(Intel)
-#      http://en.wikibooks.org/wiki/SPM/Installation_on_64bit_Mac_OS_(Intel)
-#
-###############################################################################
 
 SHELL          = /bin/sh
 MAKE           = make
 MEXBIN         = mex
 MEXOPTS        = -O -largeArrayDims
-MEXEND         = 
+MEXEND         =
 MOSUF          = o # mex output object suffix
 UNAME          = uname
 AR             = ar rcs
@@ -40,7 +16,6 @@ DEL            = rm -f
 MOVE           = mv -f
 TAR            = tar
 ZIP            = gzip -f
-
 ifndef SUF
   ifndef PLATFORM
     PLATFORM   = $(shell $(UNAME))
@@ -63,9 +38,15 @@ ifndef SUF
   endif
   ##### MacOS #####
   ifeq (Darwin,$(PLATFORM))
-    HARDWARE   = $(shell $(UNAME) -p)
+    HARDWARE   = $(shell $(UNAME) -m)
     ifeq (i386,$(HARDWARE))
       SUF      = mexmaci64
+    endif
+    ifeq (x86_64,$(HARDWARE))
+      SUF      = mexmaci64
+    endif
+    ifeq (arm64,$(HARDWARE))
+      SUF      = mexmaca64
     endif
     ifndef SUF
       $(error Unknowm platform $(PLATFORM)-$(HARDWARE))
@@ -98,11 +79,8 @@ ifndef SUF
     $(error Unknowm platform $(PLATFORM))
   endif
 endif
-
 MEX            = $(MEXBIN) $(MEXOPTS)
-
 MATLABROOT     = $(realpath $(shell which $(firstword $(MEXBIN))))
-
 define verb
 	@ echo "_____________________________________________________________"
 	@ echo ""

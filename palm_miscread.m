@@ -22,12 +22,16 @@ function X = palm_miscread(filename,varargin)
 % X.extra     : Contain extra information, depending on the kind
 %               of data that was read and the function or
 %               program used for reading.
+% affine      : Affine matrix, to be used only for information hence
+%               here in a consistent place for different formats.
+%               The affine matrix that matters when saving the data is
+%               the one inside extras.
 %
 % _____________________________________
 % Anderson M. Winkler
 % FMRIB / University of Oxford
 % Aug/2013 (first version)
-% May/2025 (this version)
+% Mar/2026 (this version)
 % http://brainder.org
 
 % - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -100,11 +104,12 @@ switch lower(fext{end})
 
         % Read a generic text file
         X.readwith = 'textscan';
-        fid = fopen(X.filename);
-        X.data = textscan(fid,'%s');
-        X.data = X.data{1};
+        fid        = fopen(X.filename);
+        X.data     = textscan(fid,'%s');
+        X.data     = X.data{1};
         fclose(fid);
-        X.extra = [];
+        X.extra    = [];
+        X.affine   = NaN;
 
     case 'csv'
 
@@ -113,20 +118,23 @@ switch lower(fext{end})
         % 'textscan', which on its turn has a limitation of 100k columns.
         % Using 'load' bypass this issue.
         X.readwith = 'load';
-        X.data = load(X.filename);
-        X.extra = [];
+        X.data     = load(X.filename);
+        X.extra    = [];
+        X.affine   = NaN;
 
     case {'mat','con','fts','grp'}
 
         % Read an FSL "VEST" file.
-        X.readwith = 'vestread';
+        X.readwith           = 'vestread';
         [X.data,X.extra.PPH] = palm_vestread(X.filename);
+        X.affine             = NaN;
 
     case 'mset'
 
         % Set of matrices
         X.readwith = 'mset';
-        X.data = palm_msetread(X.filename);
+        X.data     = palm_msetread(X.filename);
+        X.affine   = NaN;
 
     case 'gz'
 
@@ -153,11 +161,18 @@ switch lower(fext{end})
                         X.readwith  = 'ipt';
                         X.extra.hdr = niftiinfo(X.filename);
                         X.data      = niftiread(X.filename);
+                        X.affine    = X.extra.hdr.Transform.T';
                     else
                         X.readwith  = 'fs_load_nifti';
                         X.extra.hdr = load_nifti(X.filename);
                         X.data      = X.extra.hdr.vol;
                         X.extra.hdr.vol = [];
+                        if X.extra.hdr.qform_code > 0 % qform visited first
+                            X.affine = X.extra.hdr.qform;
+                        end
+                        if X.extra.hdr.sform_code > 0 % but sform will prevail
+                            X.affine = X.extra.hdr.sform;
+                        end
                     end
                 end
             end
@@ -183,23 +198,31 @@ switch lower(fext{end})
             % be used for ANALYZE.
             if useniiclass
                 X.readwith = 'nifticlass';
-                X.extra = nifti(X.filename);
-                X.data = X.extra.dat;
+                X.extra    = nifti(X.filename);
+                X.data     = X.extra.dat;
+                X.affine   = X.extra.mat;
             else
                 if ext.ipt
                     X.readwith  = 'ipt';
                     X.extra.hdr = niftiinfo(X.filename);
                     X.data      = niftiread(X.filename);
+                    X.affine    = X.extra.hdr.Transform.T';
                 else
                     X.readwith  = 'fs_load_nifti';
                     X.extra.hdr = load_nifti(X.filename);
                     X.data      = X.extra.hdr.vol;
                     X.extra.hdr.vol = [];
+                    if X.extra.hdr.qform_code > 0 % qform visited first
+                        X.affine = X.extra.hdr.qform;
+                    end
+                    if X.extra.hdr.sform_code > 0 % but sform will prevail
+                        X.affine = X.extra.hdr.sform;
+                    end
                 end
             end
         end
 
-    case {'dpv','dpf','dpx'}
+    case {'dpv','dpf','dpx','asc'}
 
         % Read a DPV/DPF file, in ASCII
         X.readwith = 'dpxread';
@@ -250,6 +273,7 @@ switch lower(fext{end})
         % Read a FreeSurfer MGH/MGZ file
         X.readwith = 'fs_load_mgh';
         [X.data,X.extra.M,X.extra.mr_parms,X.extra.volsz] = load_mgh(X.filename);
+        X.affine = X.extra.M;
 
     case 'annot'
 
